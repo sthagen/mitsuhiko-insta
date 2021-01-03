@@ -8,19 +8,19 @@ use serde::Serialize;
 
 #[test]
 fn test_selector_parser() {
-    macro_rules! assert_selector {
+    macro_rules! assert_selector_snapshot {
         ($short:expr, $sel:expr) => {
             assert_debug_snapshot!($short, Selector::parse($sel).unwrap());
         };
     }
 
-    assert_selector!("foo_bar", ".foo.bar");
-    assert_selector!("foo_bar_alt", ".foo[\"bar\"]");
-    assert_selector!("foo_bar_full_range", ".foo.bar[]");
-    assert_selector!("foo_bar_range_to", ".foo.bar[:10]");
-    assert_selector!("foo_bar_range_from", ".foo.bar[10:]");
-    assert_selector!("foo_bar_range", ".foo.bar[10:20]");
-    assert_selector!("foo_bar_deep", ".foo.bar.**");
+    assert_selector_snapshot!("foo_bar", ".foo.bar");
+    assert_selector_snapshot!("foo_bar_alt", ".foo[\"bar\"]");
+    assert_selector_snapshot!("foo_bar_full_range", ".foo.bar[]");
+    assert_selector_snapshot!("foo_bar_range_to", ".foo.bar[:10]");
+    assert_selector_snapshot!("foo_bar_range_from", ".foo.bar[10:]");
+    assert_selector_snapshot!("foo_bar_range", ".foo.bar[10:20]");
+    assert_selector_snapshot!("foo_bar_deep", ".foo.bar.**");
 }
 
 #[derive(Serialize)]
@@ -77,8 +77,7 @@ fn test_with_random_value_and_trailing_comma() {
 #[cfg(feature = "csv")]
 #[test]
 fn test_with_random_value_csv() {
-    use insta::assert_csv_snapshot;
-    assert_csv_snapshot!("user_csv", &User {
+    insta::assert_csv_snapshot!("user_csv", &User {
         id: 44,
         username: "julius_csv".to_string(),
         email: Email("julius@example.com".to_string()),
@@ -91,8 +90,7 @@ fn test_with_random_value_csv() {
 #[cfg(feature = "ron")]
 #[test]
 fn test_with_random_value_ron() {
-    use insta::assert_ron_snapshot;
-    assert_ron_snapshot!("user_ron", &User {
+    insta::assert_ron_snapshot!("user_ron", &User {
         id: 53,
         username: "john_ron".to_string(),
         email: Email("john@example.com".to_string()),
@@ -105,8 +103,7 @@ fn test_with_random_value_ron() {
 #[cfg(feature = "toml")]
 #[test]
 fn test_with_random_value_toml() {
-    use insta::assert_toml_snapshot;
-    assert_toml_snapshot!("user_toml", &User {
+    insta::assert_toml_snapshot!("user_toml", &User {
         id: 53,
         username: "john_ron".to_string(),
         email: Email("john@example.com".to_string()),

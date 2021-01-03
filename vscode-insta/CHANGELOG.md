@@ -1,9 +1,32 @@
 # Change Log
 
-All notable changes to the "insta" extension will be documented in this file.
+Contains all notable changes to the vscode plugin for insta.
 
-Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
+## 1.0.6
 
-## [Unreleased]
+* Enable syntax highlighting for `.snap.new` files
+* Added support for accepting/rejecting/diffing non-inline snapshots.
 
-- Initial release
+## 1.0.5
+
+* Require commas after named snapshot assertions
+
+## 1.0.4
+
+* Added fuzzy jump to definition
+
+## 1.0.3
+
+* Bugfix release
+
+## 1.0.2
+
+* Added jump to definition
+
+## 1.0.1
+
+* Improvements to the syntax grammer
+
+## 1.0.0
+
+* Initial release
