@@ -2,6 +2,30 @@
 
 All notable changes to insta and cargo-insta are documented here.
 
+## 1.7.0
+
+* Added support for u128/i128.  (#169)
+
+## 1.6.3
+
+* Fix a bug with empty lines in inline snapshots.  (#166)
+
+## 1.6.2
+
+* Lower Rust support to 1.41.0  (#165)
+
+## 1.6.1
+
+* Bump similar dependency to reintroduce support for Rust 1.43.0  (#162)
+* Fixed custom extension support in cargo-insta  (#163)
+
+## 1.6.0
+
+* Change CSV serialization format to format multiple structs as
+  multiple rows.   (#156)
+* Improvements to diff rendering.
+* Detect some snapshot name clashes.  (#159)
+
 ## 1.5.3
 
 * Replace [difference](https://crates.io/crates/difference) with
@@ -126,5 +150,5 @@ To upgrade to the new insta macros and snapshot formats you can use
 
     $ cargo install fastmod
     $ cargo install cargo-insta
-    $ fastmod '\bassert_([a-z]+_snapshot)_matches!' 'assert_${1}!' -e rs --accept-all
+    $ fastmod '\bassert_([a-z]+_snapshot)_matches!' 'assert_${`}!' -e rs --accept-all
     $ cargo insta test --all --force-update-snapshots --accept
