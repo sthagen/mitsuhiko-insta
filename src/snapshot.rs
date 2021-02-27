@@ -269,6 +269,7 @@ impl SnapshotContents {
     pub fn from_inline(value: &str) -> SnapshotContents {
         SnapshotContents(get_inline_snapshot_value(value))
     }
+
     pub fn to_inline(&self, indentation: usize) -> String {
         let contents = &self.0;
         let mut out = String::new();
@@ -306,13 +307,15 @@ impl SnapshotContents {
 
 impl From<&str> for SnapshotContents {
     fn from(value: &str) -> SnapshotContents {
-        SnapshotContents(value.to_string())
+        // make sure we have unix newlines consistently
+        SnapshotContents(value.replace("\r\n", "\n").to_string())
     }
 }
 
 impl From<String> for SnapshotContents {
     fn from(value: String) -> SnapshotContents {
-        SnapshotContents(value)
+        // make sure we have unix newlines consistently
+        SnapshotContents(value.replace("\r\n", "\n").to_string())
     }
 }
 
@@ -330,6 +333,7 @@ impl PartialEq for SnapshotContents {
 
 #[test]
 fn test_snapshot_contents() {
+    use similar_asserts::assert_eq;
     let snapshot_contents = SnapshotContents("testing".to_string());
     assert_eq!(snapshot_contents.to_inline(0), r#""testing""#);
 

@@ -9,9 +9,10 @@ use std::process::{Command, Stdio};
 use std::str;
 use std::sync::Mutex;
 use std::thread;
+use std::time::Duration;
 
 use lazy_static::lazy_static;
-use similar::{ChangeTag, TextDiff};
+use similar::{Algorithm, ChangeTag, TextDiff};
 
 use serde::Deserialize;
 
@@ -208,7 +209,10 @@ pub fn get_cargo_workspace(manifest_dir: &str) -> &Path {
 
 fn print_changeset(old: &str, new: &str, expr: Option<&str>) {
     let width = term_width();
-    let diff = TextDiff::from_lines(old, new);
+    let diff = TextDiff::configure()
+        .algorithm(Algorithm::Patience)
+        .timeout(Duration::from_millis(500))
+        .diff_lines(old, new);
 
     if let Some(expr) = expr {
         println!("{:─^1$}", "", width,);
@@ -566,6 +570,8 @@ fn generate_snapshot_name_for_thread(module_path: &str) -> Result<String, &'stat
 /// frozen value string.  If the string starts with the '⋮' character
 /// (optionally prefixed by whitespace) the alternative serialization format
 /// is picked which has slightly improved indentation semantics.
+///
+/// This also changes all newlines to \n
 pub(super) fn get_inline_snapshot_value(frozen_value: &str) -> String {
     // TODO: could move this into the SnapshotContents `from_inline` method
     // (the only call site)
@@ -640,6 +646,7 @@ fn min_indentation(snapshot: &str) -> usize {
 
 #[test]
 fn test_min_indentation() {
+    use similar_asserts::assert_eq;
     let t = r#"
    1
    2
@@ -693,6 +700,7 @@ a
 }
 
 // Removes excess indentation, removes excess whitespace at start & end
+// and changes newlines to \n.
 fn normalize_inline_snapshot(snapshot: &str) -> String {
     let indentation = min_indentation(snapshot);
     snapshot
@@ -706,6 +714,7 @@ fn normalize_inline_snapshot(snapshot: &str) -> String {
 
 #[test]
 fn test_normalize_inline_snapshot() {
+    use similar_asserts::assert_eq;
     // here we do exact matching (rather than `assert_snapshot`)
     // to ensure we're not incorporating the modifications this library makes
     let t = r#"
@@ -924,6 +933,7 @@ pub fn assert_snapshot(
     };
 
     let new_snapshot_contents: SnapshotContents = new_snapshot.into();
+
     let new = Snapshot::from_components(
         module_path.replace("::", "__"),
         snapshot_name.as_ref().map(|x| x.to_string()),
@@ -952,7 +962,7 @@ pub fn assert_snapshot(
 
     // if the snapshot matches we're done.
     if let Some(ref old_snapshot) = old {
-        if old_snapshot.contents() == new.contents() {
+        if dbg!(old_snapshot.contents()) == dbg!(new.contents()) {
             // let's just make sure there are no more pending files lingering
             // around.
             if let Some(ref snapshot_file) = snapshot_file {
