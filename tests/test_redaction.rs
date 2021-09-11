@@ -1,5 +1,7 @@
 #![cfg(feature = "redactions")]
 
+use std::collections::{BTreeMap, HashMap};
+
 use insta::_macro_support::Selector;
 use insta::{
     assert_debug_snapshot, assert_json_snapshot, assert_yaml_snapshot, with_settings, Settings,
@@ -271,4 +273,71 @@ fn test_redact_recursive() {
       }
     }
     "###);
+}
+
+#[test]
+fn test_struct_array_redaction() {
+    #[derive(Serialize)]
+    pub struct Product {
+        _id: String,
+        product_name: String,
+    }
+
+    #[derive(Serialize)]
+    pub struct Checkout {
+        _id: String,
+        products: Vec<Product>,
+    }
+
+    let checkout = Checkout {
+        _id: "checkout/1".to_string(),
+        products: vec![
+            Product {
+                _id: "product/1".to_string(),
+                product_name: "a car".to_string(),
+            },
+            Product {
+                _id: "product/2".to_string(),
+                product_name: "a boat".to_string(),
+            },
+        ],
+    };
+
+    insta::assert_yaml_snapshot!(vec![checkout], {
+        "[]._id" => "[checkout_id]",
+        "[].products[]._id" => "[product_id]",
+        "[].products[].product_name" => "[product_name]",
+    });
+}
+
+#[test]
+fn test_map_key_redaction() {
+    #[derive(Serialize, Hash, PartialEq, PartialOrd, Eq, Ord)]
+    struct Key {
+        bucket: u32,
+        value: u32,
+    }
+
+    #[derive(Serialize)]
+    struct Foo {
+        hm: HashMap<Key, u32>,
+        btm: BTreeMap<(u32, u32), u32>,
+    }
+
+    let mut hm = HashMap::new();
+    hm.insert(
+        Key {
+            bucket: 1,
+            value: 0,
+        },
+        42,
+    );
+    let mut btm = BTreeMap::new();
+    btm.insert((0, 0), 23);
+    let foo = Foo { hm, btm };
+
+    insta::assert_yaml_snapshot!(foo, {
+        ".hm.$key.bucket" => "[bucket]",
+        ".btm.$key" => "[key]",
+    });
 }

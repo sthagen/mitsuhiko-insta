@@ -7,7 +7,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::str;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -21,7 +21,7 @@ use crate::snapshot::{MetaData, PendingInlineSnapshot, Snapshot, SnapshotContent
 use crate::utils::{is_ci, style};
 
 lazy_static! {
-    static ref WORKSPACES: Mutex<BTreeMap<String, &'static Path>> = Mutex::new(BTreeMap::new());
+    static ref WORKSPACES: Mutex<BTreeMap<String, Arc<PathBuf>>> = Mutex::new(BTreeMap::new());
     static ref TEST_NAME_COUNTERS: Mutex<BTreeMap<String, usize>> = Mutex::new(BTreeMap::new());
     static ref TEST_NAME_CLASH_DETECTION: Mutex<BTreeMap<String, bool>> =
         Mutex::new(BTreeMap::new());
@@ -183,27 +183,38 @@ fn get_cargo() -> String {
         .unwrap_or_else(|| "cargo".to_string())
 }
 
-pub fn get_cargo_workspace(manifest_dir: &str) -> &Path {
+pub fn get_cargo_workspace(manifest_dir: &str) -> Arc<PathBuf> {
     // we really do not care about poisoning here.
     let mut workspaces = WORKSPACES.lock().unwrap_or_else(|x| x.into_inner());
     if let Some(rv) = workspaces.get(manifest_dir) {
-        rv
+        rv.clone()
     } else {
-        #[derive(Deserialize)]
-        struct Manifest {
-            workspace_root: String,
-        }
-        let output = std::process::Command::new(get_cargo())
-            .arg("metadata")
-            .arg("--format-version=1")
-            .arg("--no-deps")
-            .current_dir(manifest_dir)
-            .output()
-            .unwrap();
-        let manifest: Manifest = serde_json::from_slice(&output.stdout).unwrap();
-        let path = Box::leak(Box::new(PathBuf::from(manifest.workspace_root)));
-        workspaces.insert(manifest_dir.to_string(), path.as_path());
-        workspaces.get(manifest_dir).unwrap()
+        // If INSTA_WORKSPACE_ROOT environment variable is set, use the value
+        // as-is. This is useful for those users where the compiled in
+        // CARGO_MANIFEST_DIR points to some transient location. This can easily
+        // happen if the user builds the test in one directory but then tries to
+        // run it in another: even if sources are available in the new
+        // directory, in the past we would always go with the compiled-in value.
+        // The compiled-in directory may not even exist anymore.
+        let path = if let Ok(workspace_root) = std::env::var("INSTA_WORKSPACE_ROOT") {
+            Arc::new(PathBuf::from(workspace_root))
+        } else {
+            #[derive(Deserialize)]
+            struct Manifest {
+                workspace_root: PathBuf,
+            }
+            let output = std::process::Command::new(get_cargo())
+                .arg("metadata")
+                .arg("--format-version=1")
+                .arg("--no-deps")
+                .current_dir(manifest_dir)
+                .output()
+                .unwrap();
+            let manifest: Manifest = serde_json::from_slice(&output.stdout).unwrap();
+            Arc::new(manifest.workspace_root)
+        };
+        workspaces.insert(manifest_dir.to_string(), path.clone());
+        path
     }
 }
 
@@ -886,6 +897,7 @@ pub fn assert_snapshot(
     expr: &str,
 ) -> Result<(), Box<dyn Error>> {
     let cargo_workspace = get_cargo_workspace(manifest_dir);
+    let cargo_workspace = cargo_workspace.as_path();
     let output_behavior = output_snapshot_behavior();
 
     let (snapshot_name, snapshot_file, old, pending_snapshots) = match refval {
