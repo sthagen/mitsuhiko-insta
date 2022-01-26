@@ -2,6 +2,11 @@
 
 All notable changes to insta and cargo-insta are documented here.
 
+## 1.12.0
+
+- Add support for sorting redactions (`sorted_redaction` and `Settings::sort_selector`). (#212)
+- Changed snapshot name detection to no longer use thread names but function names. (#213)
+
 ## 1.11.0
 
 - Trim down some unnecessary dependencies and switch to `once_cell`. (#208)
