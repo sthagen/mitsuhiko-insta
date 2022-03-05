@@ -1,7 +1,5 @@
 ---
 source: tests/test_inline.rs
-assertion_line: 40
 expression: "\"Testing-thread\""
-
 ---
 Testing-thread
