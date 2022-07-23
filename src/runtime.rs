@@ -84,7 +84,7 @@ fn detect_snapshot_name(function_name: &str, module_path: &str) -> Result<String
 
     // simplify doctest names
     if is_doctest(name) {
-        name = "unnamed_doctest";
+        panic!("Cannot determine reliable names for snapshot in doctests.  Please use explicit names instead.");
     }
 
     // clean test name first
@@ -472,6 +472,11 @@ pub fn assert_snapshot(
         assertion_line,
     )?;
 
+    // apply filters if they are available
+    #[cfg(feature = "filters")]
+    let new_snapshot_value =
+        Settings::with(|settings| settings.filters().apply_to(new_snapshot_value));
+
     let new_snapshot = ctx.new_snapshot(new_snapshot_value.into(), expr);
 
     // memoize the snapshot file if requested.
@@ -499,7 +504,10 @@ pub fn assert_snapshot(
 /// Test snapshots in doctests.
 ///
 /// ```
-/// insta::assert_yaml_snapshot!(vec![1, 2, 3]);
 /// insta::assert_yaml_snapshot!("named", vec![1, 2, 3, 4, 5]);
 /// ```
-const _DOCTEST: bool = false;
+///
+/// ```should_panic
+/// insta::assert_yaml_snapshot!(vec![1, 2, 3, 4, 5]);
+/// ```
+const _DOCTEST1: bool = false;
