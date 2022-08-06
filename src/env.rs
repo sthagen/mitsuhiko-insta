@@ -5,7 +5,6 @@ use std::sync::{Arc, Mutex};
 use std::{env, fs};
 
 use once_cell::sync::Lazy;
-use serde::Deserialize;
 
 use crate::utils::is_ci;
 
@@ -106,10 +105,6 @@ pub fn get_cargo_workspace(manifest_dir: &str) -> Arc<PathBuf> {
         let path = if let Ok(workspace_root) = std::env::var("INSTA_WORKSPACE_ROOT") {
             Arc::new(PathBuf::from(workspace_root))
         } else {
-            #[derive(Deserialize)]
-            struct Manifest {
-                workspace_root: PathBuf,
-            }
             let output = std::process::Command::new(
                 env::var("CARGO")
                     .ok()
@@ -121,8 +116,12 @@ pub fn get_cargo_workspace(manifest_dir: &str) -> Arc<PathBuf> {
             .current_dir(manifest_dir)
             .output()
             .unwrap();
-            let manifest: Manifest = serde_json::from_slice(&output.stdout).unwrap();
-            Arc::new(manifest.workspace_root)
+            let docs =
+                yaml_rust::YamlLoader::load_from_str(std::str::from_utf8(&output.stdout).unwrap())
+                    .unwrap();
+            let manifest = &docs[0];
+            let workspace_root = PathBuf::from(manifest["workspace_root"].as_str().unwrap());
+            Arc::new(workspace_root)
         };
         workspaces.insert(manifest_dir.to_string(), path.clone());
         path

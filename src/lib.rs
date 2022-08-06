@@ -116,7 +116,8 @@
 //!
 //! Example:
 //!
-//! ```no_run
+#![cfg_attr(feature = "yaml", doc = " ```no_run")]
+#![cfg_attr(not(feature = "yaml"), doc = " ```ignore")]
 //! # use insta::*; use serde::Serialize;
 //! #[derive(Serialize)]
 //! pub struct User {
@@ -137,8 +138,10 @@
 //! The following features exist:
 //!
 //! * `csv`: enables CSV support ([`assert_csv_snapshot!`])
+//! * `json`: enables JSON support ([`assert_json_snapshot!`])
 //! * `ron`: enables RON support ([`assert_ron_snapshot!`])
 //! * `toml`: enables TOML support ([`assert_toml_snapshot!`])
+//! * `yaml`: enables YAML support ([`assert_yaml_snapshot!`])
 //! * `redactions`: enables support for redactions
 //! * `filters`: enables support for filters
 //! * `glob`: enables support for globbing ([`glob!`])
@@ -154,6 +157,7 @@ mod content;
 mod env;
 mod output;
 mod runtime;
+#[cfg(feature = "serialization")]
 mod serialization;
 mod settings;
 mod snapshot;
@@ -210,6 +214,8 @@ pub mod _macro_support {
     pub use crate::content::Content;
     pub use crate::env::get_cargo_workspace;
     pub use crate::runtime::{assert_snapshot, AutoName, ReferenceValue};
+
+    #[cfg(feature = "serde")]
     pub use crate::serialization::{serialize_value, SerializationFormat, SnapshotLocation};
 
     #[cfg(feature = "glob")]
