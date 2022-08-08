@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
 use std::marker::PhantomData;
 
-use super::Content;
+use crate::content::Content;
 
 use serde::{ser, Serialize, Serializer};
 
@@ -57,6 +57,7 @@ impl Content {
     }
 }
 
+#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 impl Serialize for Content {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where

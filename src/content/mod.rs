@@ -1,15 +1,43 @@
-//! this module is based on the content module in serde::private::ser
+//! This module implements a generic `Content` type that can hold
+//! runtime typed data.
+//!
+//! It's modelled after serde's data format but it's in fact possible to use
+//! this independently of serde.  The `yaml` and `json` support implemented
+//! here works without serde.  Only `yaml` has an implemented parser but since
+//! YAML is a superset of JSON insta instead currently parses JSON via the
+//! YAML implementation.
 
-mod error;
-mod formats;
-mod json;
-#[cfg(feature = "serialization")]
+pub mod json;
+#[cfg(feature = "serde")]
 mod serialization;
-pub(crate) mod utils;
+pub mod yaml;
 
-pub use error::*;
-#[cfg(feature = "serialization")]
+#[cfg(feature = "serde")]
 pub use serialization::*;
+
+use std::fmt;
+
+/// An internal error type for content related errors.
+#[derive(Debug)]
+pub enum Error {
+    FailedParsingYaml,
+    UnexpectedDataType,
+    MissingField,
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::FailedParsingYaml => f.write_str("Failed parsing the provided YAML text"),
+            Self::UnexpectedDataType => {
+                f.write_str("The present data type wasn't what was expected")
+            }
+            Self::MissingField => f.write_str("A required field was missing"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
 
 /// Represents variable typed content.
 ///

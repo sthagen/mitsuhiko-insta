@@ -7,11 +7,11 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use once_cell::sync::Lazy;
-#[cfg(feature = "serialization")]
+#[cfg(feature = "serde")]
 use serde::{de::value::Error as ValueError, Serialize};
 
 use crate::content::Content;
-#[cfg(feature = "serialization")]
+#[cfg(feature = "serde")]
 use crate::content::ContentSerializer;
 #[cfg(feature = "filters")]
 use crate::filters::Filters;
@@ -96,7 +96,7 @@ impl ActualSettings {
         self.description = Some(value.into());
     }
 
-    #[cfg(feature = "serialization")]
+    #[cfg(feature = "serde")]
     pub fn info<S: Serialize>(&mut self, s: &S) {
         let serializer = ContentSerializer::<ValueError>::new();
         let content = Serialize::serialize(s, serializer).unwrap();
@@ -319,9 +319,9 @@ impl Settings {
     /// As an example the input parameters to the function that creates the snapshot
     /// can be persisted here.
     ///
-    /// This requires the `serialization` feature.  Alternatively you can use
-    /// [`set_raw_info`](Self::set_raw_info) instead.
-    #[cfg(feature = "serialization")]
+    /// Alternatively you can use [`set_raw_info`](Self::set_raw_info) instead.
+    #[cfg(feature = "serde")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
     pub fn set_info<S: Serialize>(&mut self, s: &S) {
         self._private_inner_mut().info(s);
     }
@@ -368,9 +368,14 @@ impl Settings {
     #[cfg(feature = "redactions")]
     #[cfg_attr(docsrs, doc(cfg(feature = "redactions")))]
     pub fn add_redaction<R: Into<Redaction>>(&mut self, selector: &str, replacement: R) {
+        self.add_redaction_impl(selector, replacement.into())
+    }
+
+    #[cfg(feature = "redactions")]
+    fn add_redaction_impl(&mut self, selector: &str, replacement: Redaction) {
         self._private_inner_mut().redactions.0.push((
             Selector::parse(selector).unwrap().make_static(),
-            Arc::new(replacement.into()),
+            Arc::new(replacement),
         ));
     }
 
@@ -546,16 +551,6 @@ impl Settings {
         }
 
         BindingFuture(self.inner.clone(), future)
-    }
-
-    /// Binds the settings to the current thread permanently.
-    ///
-    /// This should no longer be used in favor of [`bind_to_scope`](Settings::bind_to_scope).
-    #[deprecated(since = "0.17.0", note = "Use Settings::bind_to_scope instead.")]
-    pub fn bind_to_thread(&self) {
-        CURRENT_SETTINGS.with(|x| {
-            x.borrow_mut().inner = self.inner.clone();
-        })
     }
 
     /// Binds the settings to the current thread and resets when the drop

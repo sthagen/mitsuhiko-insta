@@ -104,6 +104,8 @@ macro_rules! assert_toml_snapshot {
 
 /// Asserts a `Serialize` snapshot in YAML format.
 ///
+/// **Feature:** `yaml` (to be disabled by default)
+///
 /// The value needs to implement the `serde::Serialize` trait and the snapshot
 /// will be serialized in YAML format.  This does mean that unlike the debug
 /// snapshot variant the type of the value does not appear in the output.
@@ -144,12 +146,7 @@ macro_rules! assert_toml_snapshot {
 /// just use an empty string (`@""`).
 ///
 /// The snapshot name is optional but can be provided as first argument.
-#[cfg(feature = "serialization")]
-#[cfg_attr(
-    not(feature = "yaml"),
-    deprecated(note = "assert_yaml_snapshot! will require the \"yaml\" feature. \
-        Add the \"yaml\" feature to your Cargo.toml to silence this warning.")
-)]
+#[cfg(feature = "yaml")]
 #[cfg_attr(docsrs, doc(cfg(feature = "yaml")))]
 #[macro_export]
 macro_rules! assert_yaml_snapshot {
@@ -219,6 +216,8 @@ macro_rules! assert_ron_snapshot {
 
 /// Asserts a `Serialize` snapshot in JSON format.
 ///
+/// **Feature:** `json` (to be disabled by default)
+///
 /// This works exactly like [`assert_yaml_snapshot!`] but serializes in JSON format.
 /// This is normally not recommended because it makes diffs less reliable, but it can
 /// be useful for certain specialized situations.
@@ -235,12 +234,7 @@ macro_rules! assert_ron_snapshot {
 /// about redactions refer to the [redactions feature in the guide](https://insta.rs/docs/redactions/).
 ///
 /// The snapshot name is optional but can be provided as first argument.
-#[cfg(feature = "serialization")]
-#[cfg_attr(
-    not(feature = "json"),
-    deprecated(note = "assert_json_snapshot! will require the \"json\" feature. \
-        Add the \"json\" feature to your Cargo.toml to silence this warning.")
-)]
+#[cfg(feature = "json")]
 #[cfg_attr(docsrs, doc(cfg(feature = "json")))]
 #[macro_export]
 macro_rules! assert_json_snapshot {
@@ -412,7 +406,7 @@ macro_rules! assert_snapshot {
     ($name:expr, $value:expr) => {
         $crate::assert_snapshot!($name, $value, stringify!($value))
     };
-    ($name:expr, $value:expr, $debug_expr:expr) => {
+    ($name:expr, $value:expr, $debug_expr:expr) => {{
         $crate::_macro_support::assert_snapshot(
             // Creates a ReferenceValue::Named variant
             $name.into(),
@@ -425,7 +419,7 @@ macro_rules! assert_snapshot {
             $debug_expr,
         )
         .unwrap()
-    };
+    }};
     ($value:expr) => {
         $crate::assert_snapshot!($crate::_macro_support::AutoName, $value, stringify!($value))
     };
