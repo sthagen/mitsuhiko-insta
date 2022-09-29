@@ -88,6 +88,10 @@
     feature = "json",
     doc = "- [`assert_json_snapshot!`] for comparing JSON serialized output. (requires the `json` feature)"
 )]
+#![cfg_attr(
+    feature = "json",
+    doc = "- [`assert_compact_json_snapshot!`] for comparing JSON serialized output while preferring single-line formatting. (requires the `json` feature)"
+)]
 //!
 //! For macros that work with [`serde`] this crate also permits redacting of
 //! partial values.  See [redactions in the
@@ -248,7 +252,9 @@ pub mod internals {
 #[doc(hidden)]
 pub mod _cargo_insta_support {
     pub use crate::{
-        output::print_snapshot_diff, snapshot::PendingInlineSnapshot, snapshot::SnapshotContents,
+        output::{print_snapshot, print_snapshot_diff},
+        snapshot::PendingInlineSnapshot,
+        snapshot::SnapshotContents,
     };
 }
 
