@@ -2,6 +2,22 @@
 
 All notable changes to insta and cargo-insta are documented here.
 
+## 1.22.0
+
+- Added support for rendering some invisibles in diffs.  This now also
+  should make sure that ANSI sequences in strings are no longer screwing
+  up the terminal output. (#308)
+- Prevent inline snapshots to be used in loops. (#307)
+- Support the `--target` option to `cargo insta test`. (#309)
+- Globbing now adds directories as disambiguators into the snapshot
+  suffixes. This allows patterns such as `foo/*/*.txt` without
+  creating conflicts. (#310)
+
+## 1.21.2
+
+- Added missing parameters to `cargo insta test`. (#305)
+- Fixed a sorting issue in hash maps for compound keys. (#304)
+
 ## 1.21.1
 
 - Fix incorrect handling of extra args to `cargo insta test`.
