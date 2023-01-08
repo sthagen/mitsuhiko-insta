@@ -8,8 +8,8 @@ use std::str;
 use std::sync::{Arc, Mutex};
 
 use crate::env::{
-    force_pass, force_update_snapshots, get_cargo_workspace, get_output_behavior,
-    get_snapshot_update_behavior, memoize_snapshot_file, OutputBehavior, SnapshotUpdate,
+    get_cargo_workspace, get_tool_config, memoize_snapshot_file, snapshot_update_behavior,
+    OutputBehavior, SnapshotUpdateBehavior, ToolConfig,
 };
 use crate::output::{print_snapshot_diff_with_title, print_snapshot_summary_with_title};
 use crate::settings::Settings;
@@ -195,6 +195,7 @@ fn get_snapshot_filename(
 
 #[derive(Debug)]
 struct SnapshotAssertionContext<'a> {
+    tool_config: Arc<ToolConfig>,
     cargo_workspace: Arc<PathBuf>,
     module_path: &'a str,
     snapshot_name: Option<Cow<'a, str>>,
@@ -215,6 +216,7 @@ impl<'a> SnapshotAssertionContext<'a> {
         assertion_file: &'a str,
         assertion_line: u32,
     ) -> Result<SnapshotAssertionContext<'a>, Box<dyn Error>> {
+        let tool_config = get_tool_config(manifest_dir);
         let cargo_workspace = get_cargo_workspace(manifest_dir);
         let snapshot_name;
         let mut snapshot_file = None;
@@ -269,6 +271,7 @@ impl<'a> SnapshotAssertionContext<'a> {
         };
 
         Ok(SnapshotAssertionContext {
+            tool_config,
             cargo_workspace,
             module_path,
             snapshot_name,
@@ -342,19 +345,19 @@ impl<'a> SnapshotAssertionContext<'a> {
     pub fn update_snapshot(
         &self,
         new_snapshot: Snapshot,
-    ) -> Result<SnapshotUpdate, Box<dyn Error>> {
+    ) -> Result<SnapshotUpdateBehavior, Box<dyn Error>> {
         let unseen = self
             .snapshot_file
             .as_ref()
             .map_or(false, |x| fs::metadata(x).is_ok());
-        let should_print = get_output_behavior() != OutputBehavior::Nothing;
-        let snapshot_update = get_snapshot_update_behavior(unseen);
+        let should_print = self.tool_config.output_behavior() != OutputBehavior::Nothing;
+        let snapshot_update = snapshot_update_behavior(&self.tool_config, unseen);
 
         match snapshot_update {
-            SnapshotUpdate::InPlace => {
+            SnapshotUpdateBehavior::InPlace => {
                 if let Some(ref snapshot_file) = self.snapshot_file {
-                    new_snapshot.save(snapshot_file)?;
-                    if should_print {
+                    let saved = new_snapshot.save(snapshot_file)?;
+                    if should_print && saved {
                         elog!(
                             "{} {}",
                             if unseen {
@@ -377,17 +380,16 @@ impl<'a> SnapshotAssertionContext<'a> {
                     );
                 }
             }
-            SnapshotUpdate::NewFile => {
+            SnapshotUpdateBehavior::NewFile => {
                 if let Some(ref snapshot_file) = self.snapshot_file {
-                    let mut new_path = snapshot_file.to_path_buf();
-                    new_path.set_extension("snap.new");
-                    new_snapshot.save_new(&new_path)?;
-                    if should_print {
-                        elog!(
-                            "{} {}",
-                            style("stored new snapshot").green(),
-                            style(new_path.display()).cyan().underlined(),
-                        );
+                    if let Some(new_path) = new_snapshot.save_new(snapshot_file)? {
+                        if should_print {
+                            elog!(
+                                "{} {}",
+                                style("stored new snapshot").green(),
+                                style(new_path.display()).cyan().underlined(),
+                            );
+                        }
                     }
                 } else if self.is_doctest {
                     if should_print {
@@ -398,7 +400,19 @@ impl<'a> SnapshotAssertionContext<'a> {
                                 .bold(),
                         );
                     }
-                } else {
+
+                // special case for pending inline snapshots.  Here we really only want
+                // to write the contents if the snapshot contents changed as the metadata
+                // is not retained for inline snapshots.  This used to have different
+                // behavior in the past where we did indeed want to rewrite the snapshots
+                // entirely since we used to change the canonical snapshot format, but now
+                // this is significantly less likely to happen and seeing hundreds of unchanged
+                // inline snapshots in the review screen is not a lot of fun.
+                } else if self
+                    .old_snapshot
+                    .as_ref()
+                    .map_or(true, |x| x.contents() != new_snapshot.contents())
+                {
                     PendingInlineSnapshot::new(
                         Some(new_snapshot),
                         self.old_snapshot.clone(),
@@ -407,7 +421,7 @@ impl<'a> SnapshotAssertionContext<'a> {
                     .save(self.pending_snapshots_path.as_ref().unwrap())?;
                 }
             }
-            SnapshotUpdate::NoUpdate => {}
+            SnapshotUpdateBehavior::NoUpdate => {}
         }
 
         Ok(snapshot_update)
@@ -427,7 +441,7 @@ fn prevent_inline_duplicate(function_name: &str, assertion_file: &str, assertion
 
 /// This prints the information about the snapshot
 fn print_snapshot_info(ctx: &SnapshotAssertionContext, new_snapshot: &Snapshot) {
-    match get_output_behavior() {
+    match ctx.tool_config.output_behavior() {
         OutputBehavior::Summary => {
             print_snapshot_summary_with_title(
                 ctx.cargo_workspace.as_path(),
@@ -463,7 +477,7 @@ macro_rules! print_or_panic {
 }
 
 /// Finalizes the assertion based on the update result.
-fn finalize_assertion(ctx: &SnapshotAssertionContext, update_result: SnapshotUpdate) {
+fn finalize_assertion(ctx: &SnapshotAssertionContext, update_result: SnapshotUpdateBehavior) {
     // if we are in glob mode, we want to adjust the finalization
     // so that we do not show the hints immediately.
     let fail_fast = {
@@ -482,8 +496,8 @@ fn finalize_assertion(ctx: &SnapshotAssertionContext, update_result: SnapshotUpd
     };
 
     if fail_fast
-        && update_result == SnapshotUpdate::NewFile
-        && get_output_behavior() != OutputBehavior::Nothing
+        && update_result == SnapshotUpdateBehavior::NewFile
+        && ctx.tool_config.output_behavior() != OutputBehavior::Nothing
         && !ctx.is_doctest
     {
         println!(
@@ -492,8 +506,8 @@ fn finalize_assertion(ctx: &SnapshotAssertionContext, update_result: SnapshotUpd
         );
     }
 
-    if update_result != SnapshotUpdate::InPlace && !force_pass() {
-        if fail_fast && get_output_behavior() != OutputBehavior::Nothing {
+    if update_result != SnapshotUpdateBehavior::InPlace && !ctx.tool_config.force_pass() {
+        if fail_fast && ctx.tool_config.output_behavior() != OutputBehavior::Nothing {
             println!(
                 "{hint}",
                 hint = style(
@@ -511,8 +525,8 @@ fn finalize_assertion(ctx: &SnapshotAssertionContext, update_result: SnapshotUpd
             let mut stack = crate::glob::GLOB_STACK.lock().unwrap();
             if let Some(glob_collector) = stack.last_mut() {
                 glob_collector.failed += 1;
-                if update_result == SnapshotUpdate::NewFile
-                    && get_output_behavior() != OutputBehavior::Nothing
+                if update_result == SnapshotUpdateBehavior::NewFile
+                    && ctx.tool_config.output_behavior() != OutputBehavior::Nothing
                 {
                     glob_collector.show_insta_hint = true;
                 }
@@ -560,6 +574,7 @@ pub fn assert_snapshot(
         assertion_file,
         assertion_line,
     )?;
+    let tool_config = get_tool_config(manifest_dir);
 
     // apply filters if they are available
     #[cfg(feature = "filters")]
@@ -577,7 +592,7 @@ pub fn assert_snapshot(
     if ctx.old_snapshot.as_ref().map(|x| x.contents()) == Some(new_snapshot.contents()) {
         ctx.cleanup_passing()?;
 
-        if force_update_snapshots() {
+        if tool_config.force_update_snapshots() {
             ctx.update_snapshot(new_snapshot)?;
         }
     // otherwise print information and update snapshots.

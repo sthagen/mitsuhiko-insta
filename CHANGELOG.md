@@ -2,6 +2,38 @@
 
 All notable changes to insta and cargo-insta are documented here.
 
+## 1.26.0
+
+- Make canonicalization in `glob!` optional to better support WASI.
+
+## 1.25.0
+
+- Added a way to disable the undiscoverable snapshots warning.  By
+  setting the `review.warn_undiscovered` config key to `false` a
+  warning is never printed. (#334)
+- Force updating snapshots will now not overwrite files that did not
+  change.  This improves the behavior for situations if that behavior
+  is preferred as a default choice. (#335)
+
+## 1.24.1
+
+- Fix non working `--include-hidden` flag (#331)
+- Fix incorrect mapping of `review.include_ignored` (#330) 
+
+## 1.24.0
+
+- Added an insta tool config (`.config/insta.yaml`) to change the
+  behavior of insta and cargo-insta. (#322)
+- Renamed `--no-ignore` to `--include-ignored`.
+- Added `--include-hidden` to instruct insta to also walk into
+  hidden paths.
+- Added new `--unreferenced` option to `cargo-insta test` which allows
+  fine tuning of what should happen with unreferenced files.  It's now
+  possible to ignore (default), warn, reject or delete unreferenced
+  snapshots. (#328)
+- Resolved an error message about doc tests when using nextest with
+  test targeting. (#317)
+
 ## 1.23.0
 
 - Add a hint if snapshots might be skipped. (#314)

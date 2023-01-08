@@ -187,6 +187,44 @@
 //! There are some settings that can be changed on a per-thread (and thus
 //! per-test) basis.  For more information see [Settings].
 //!
+//! Additionally Insta will load a YAML config file with settings that change
+//! the behavior of insta between runs.  It's loaded from any of the following
+//! locations: `.config/insta.yaml`, `insta.yaml` and `.insta.yaml` from the
+//! workspace root.  The following config options exist:
+//!
+//! ```yaml
+//! behavior:
+//!   # also set by INSTA_FORCE_UPDATE
+//!   force_update: true/false
+//!   # also set by INSTA_FORCE_PASS
+//!   force_pass: true/false
+//!   # also set by INSTA_OUTPUT
+//!   output: "diff" | "summary" | "minimal" | "none"
+//!   # also set by INSTA_UPDATE
+//!   update: "auto" | "always" | "new" | "unseen" | "no"
+//!   # also set by INSTA_GLOB_FAIL_FAST
+//!   glob_fail_fast: true/false
+//!
+//! # these are used by cargo insta test
+//! test:
+//!   # also set by INSTA_TEST_RUNNER
+//!   runner: "auto" | "cargo-test" | "nextest"
+//!   # automatically assume --review was passed to cargo insta test
+//!   auto_review: true/false
+//!   # automatically assume --accept-unseen was passed to cargo insta test
+//!   auto_accept_unseen: true/false
+//!
+//! # these are used by cargo insta review
+//! review:
+//!   # also look for snapshots in ignored folders
+//!   include_ignored: true / false
+//!   # also look for snapshots in hidden folders
+//!   include_hidden: true / false
+//!   # show a warning if undiscovered (ignored or hidden) snapshots are found.
+//!   # defaults to true but creates a performance hit.
+//!   warn_undiscovered: true / false
+//! ```
+//!
 //! # Optional: Faster Runs
 //!
 //! Insta benefits from being compiled in release mode, even as dev dependency.  It
@@ -250,11 +288,17 @@ pub mod internals {
 
 // exported for cargo-insta only
 #[doc(hidden)]
+#[cfg(feature = "_cargo_insta_internal")]
 pub mod _cargo_insta_support {
     pub use crate::{
+        env::{
+            Error as ToolConfigError, OutputBehavior, SnapshotUpdate, TestRunner, ToolConfig,
+            UnreferencedSnapshots,
+        },
         output::{print_snapshot, print_snapshot_diff},
         snapshot::PendingInlineSnapshot,
         snapshot::SnapshotContents,
+        utils::is_ci,
     };
 }
 
