@@ -2,6 +2,15 @@
 
 All notable changes to insta and cargo-insta are documented here.
 
+## 1.27.0
+
+- Fix an issue where the inline snapshot patcher could panic in
+  certain situations. (#341)
+- `cargo insta test` now correctly detects CI environments like
+  `cargo test` does.  In that case it will by fail rather than
+  create snapshot update files. (#345)
+- Added `cargo insta test --check` to force check runs. (#345)
+
 ## 1.26.0
 
 - Make canonicalization in `glob!` optional to better support WASI.
