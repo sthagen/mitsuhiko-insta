@@ -2,6 +2,16 @@
 
 All notable changes to insta and cargo-insta are documented here.
 
+## 1.28.0
+
+- Added `allow_duplicates!` to enable multiple assertions for a
+  single snapshot. (#346)
+- Ensure that expressions formatted with `rustfmt` use unix newlines.
+- Added a way to disable diffing in review. (#348)
+- Added three argument version of `glob!` to set a different base
+  path. (#347)
+- Added `rounded_redaction` to truncate floating point values. (#350)
+
 ## 1.27.0
 
 - Fix an issue where the inline snapshot patcher could panic in
