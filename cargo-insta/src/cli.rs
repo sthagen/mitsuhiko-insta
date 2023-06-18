@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::borrow::{Borrow, Cow};
 use std::collections::HashSet;
 use std::error::Error;
 use std::path::{Path, PathBuf};
@@ -352,7 +352,9 @@ fn handle_target_args(target_args: &TargetArgs) -> Result<LocationInfo<'_>, Box<
         target_args.manifest_path.as_ref(),
     ) {
         (Some(_), Some(_)) => {
-            return Err(err_msg("both manifest-path and workspace-root provided.".to_string()))
+            return Err(err_msg(
+                "both manifest-path and workspace-root provided.".to_string(),
+            ))
         }
         (None, Some(manifest)) => (None, Some(Cow::Borrowed(manifest))),
         (Some(root), manifest_path) => {
@@ -605,24 +607,17 @@ fn test_run(mut cmd: TestCommand, color: &str) -> Result<(), Box<dyn Error>> {
         success = success && proc.status()?.success();
     }
 
-    if !success {
-        if cmd.review {
-            eprintln!(
-                "{} non snapshot tests failed, skipping review",
-                style("warning:").bold().yellow()
-            );
-        } else if cmd.accept {
-            eprintln!(
-                "{} non snapshot tests failed, not accepted changes",
-                style("warning:").bold().yellow()
-            );
-        }
+    if !success && cmd.review {
+        eprintln!(
+            "{} non snapshot tests failed, skipping review",
+            style("warning:").bold().yellow()
+        );
         return Err(QuietExit(1).into());
     }
 
     // handle unreferenced snapshots if we were instructed to do so
     if let Some(ref path) = snapshot_ref_file {
-        handle_unreferenced_snapshots(path, &loc, unreferenced, cmd.package.as_deref())?;
+        handle_unreferenced_snapshots(path.borrow(), &loc, unreferenced, cmd.package.as_deref())?;
     }
 
     if cmd.review || cmd.accept {
@@ -660,7 +655,7 @@ fn test_run(mut cmd: TestCommand, color: &str) -> Result<(), Box<dyn Error>> {
 }
 
 fn handle_unreferenced_snapshots(
-    path: &Cow<Path>,
+    path: &Path,
     loc: &LocationInfo<'_>,
     unreferenced: UnreferencedSnapshots,
     package: Option<&str>,
