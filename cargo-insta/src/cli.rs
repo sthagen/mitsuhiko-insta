@@ -45,6 +45,7 @@ struct Opts {
     bin_name = "cargo insta",
     after_help = "For the online documentation of the latest version, see https://insta.rs/docs/cli/."
 )]
+#[allow(clippy::large_enum_variant)]
 enum Command {
     /// Interactively review snapshots
     #[structopt(name = "review", alias = "verify")]
@@ -415,6 +416,7 @@ fn handle_target_args(target_args: &TargetArgs) -> Result<LocationInfo<'_>, Box<
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn load_snapshot_containers<'a>(
     loc: &'a LocationInfo,
 ) -> Result<
@@ -441,6 +443,7 @@ fn load_snapshot_containers<'a>(
             snapshot_containers.push((snapshot_container?, None));
         }
     }
+    snapshot_containers.sort_by(|a, b| a.0.snapshot_sort_key().cmp(&b.0.snapshot_sort_key()));
     Ok((snapshot_containers, roots))
 }
 
@@ -775,6 +778,7 @@ fn handle_unreferenced_snapshots(
     Ok(())
 }
 
+#[allow(clippy::type_complexity)]
 fn prepare_test_runner<'snapshot_ref>(
     test_runner: TestRunner,
     unreferenced: UnreferencedSnapshots,
