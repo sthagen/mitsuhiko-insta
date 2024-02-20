@@ -20,7 +20,7 @@ use std::fmt;
 /// An internal error type for content related errors.
 #[derive(Debug)]
 pub enum Error {
-    FailedParsingYaml,
+    FailedParsingYaml(std::path::PathBuf),
     UnexpectedDataType,
     #[cfg(feature = "_cargo_insta_internal")]
     MissingField,
@@ -29,7 +29,9 @@ pub enum Error {
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::FailedParsingYaml => f.write_str("Failed parsing the provided YAML text"),
+            Self::FailedParsingYaml(p) => {
+                f.write_str(format!("Failed parsing the YAML from {:?}", p.display()).as_str())
+            }
             Self::UnexpectedDataType => {
                 f.write_str("The present data type wasn't what was expected")
             }

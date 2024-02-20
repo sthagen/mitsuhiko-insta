@@ -129,9 +129,9 @@ impl ToolConfig {
         let mut cfg = None;
         for choice in &[".config/insta.yaml", "insta.yaml", ".insta.yaml"] {
             let path = workspace_dir.join(choice);
-            match fs::read_to_string(path) {
+            match fs::read_to_string(&path) {
                 Ok(s) => {
-                    cfg = Some(yaml::parse_str(&s).map_err(Error::Deserialize)?);
+                    cfg = Some(yaml::parse_str(&s, &path).map_err(Error::Deserialize)?);
                     break;
                 }
                 // ideally we would not swallow all errors here but unfortunately there are
@@ -414,7 +414,6 @@ impl std::str::FromStr for UnreferencedSnapshots {
 pub fn memoize_snapshot_file(snapshot_file: &Path) {
     if let Ok(path) = env::var("INSTA_SNAPSHOT_REFERENCES_FILE") {
         let mut f = fs::OpenOptions::new()
-            .write(true)
             .append(true)
             .create(true)
             .open(path)

@@ -126,9 +126,9 @@ struct TestCommand {
     /// Test all examples
     #[structopt(long)]
     examples: bool,
-    /// Test only the specified test target
+    /// Test only the specified test targets
     #[structopt(long)]
-    test: Option<String>,
+    test: Vec<String>,
     /// Test all tests
     #[structopt(long)]
     tests: bool,
@@ -186,10 +186,10 @@ struct TestCommand {
     /// Update all snapshots even if they are still matching.
     #[structopt(long)]
     force_update_snapshots: bool,
-    /// Controls what happens with unreferenced snapshots.
+    /// Handle unreferenced snapshots after a successful test run.
     #[structopt(long, default_value="ignore", possible_values=&["ignore", "warn", "reject", "delete", "auto"])]
     unreferenced: String,
-    /// Delete unreferenced snapshots after the test run.
+    /// Delete unreferenced snapshots after a successful test run.
     #[structopt(long, hidden = true)]
     delete_unreferenced_snapshots: bool,
     /// Filters to apply to the insta glob feature.
@@ -597,6 +597,7 @@ fn test_run(mut cmd: TestCommand, color: &str) -> Result<(), Box<dyn Error>> {
 
     // Legacy command
     if cmd.delete_unreferenced_snapshots {
+        println!("Warning: `--delete-unreferenced-snapshots` is deprecated. Use `--unreferenced=delete` instead.");
         cmd.unreferenced = "delete".into();
     }
 
@@ -641,9 +642,12 @@ fn test_run(mut cmd: TestCommand, color: &str) -> Result<(), Box<dyn Error>> {
         return Err(QuietExit(1).into());
     }
 
-    // handle unreferenced snapshots if we were instructed to do so
-    if let Some(ref path) = snapshot_ref_file {
-        handle_unreferenced_snapshots(path.borrow(), &loc, unreferenced, &cmd.package[..])?;
+    // handle unreferenced snapshots if we were instructed to do so and the
+    // tests ran successfully
+    if success {
+        if let Some(ref path) = snapshot_ref_file {
+            handle_unreferenced_snapshots(path.borrow(), &loc, unreferenced, &cmd.package[..])?;
+        }
     }
 
     if cmd.review || cmd.accept {
@@ -843,7 +847,7 @@ fn prepare_test_runner<'snapshot_ref>(
         proc.arg("--examples");
         prevents_doc_run = true;
     }
-    if let Some(ref test) = cmd.test {
+    for test in &cmd.test {
         proc.arg("--test");
         proc.arg(test);
         prevents_doc_run = true;

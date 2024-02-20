@@ -2,12 +2,19 @@
 
 All notable changes to insta and cargo-insta are documented here.
 
+## 1.35.1
+
+- Fixed a bug with diffs showing bogus newlines.
+
 ## 1.35.0
 
 - Fixed a crash when a file named `.config` was in the root.
 - Added new alternative `match .. { ... }` syntax to redactions for better
   `rustfmt` support.  (#428)
 - The `--package` parameter can be supplied multiple times now.  (#427)
+- Leading newlines in snapshots are now ignored to resolve issues with
+  inline snapshots that were never able to match.  (#444)
+- `cargo insta test` now accepts the `--test` parameter multiple times.  (#437)
 
 ## 1.34.0
 

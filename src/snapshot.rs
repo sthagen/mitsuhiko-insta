@@ -44,7 +44,7 @@ impl PendingInlineSnapshot {
         let mut rv: Vec<Self> = contents
             .lines()
             .map(|line| {
-                let value = yaml::parse_str(line)?;
+                let value = yaml::parse_str(line, p)?;
                 Self::from_content(value)
             })
             .collect::<Result<_, Box<dyn Error>>>()?;
@@ -286,7 +286,7 @@ impl Snapshot {
                     break;
                 }
             }
-            let content = yaml::parse_str(&buf)?;
+            let content = yaml::parse_str(&buf, p)?;
             MetaData::from_content(content)?
         // legacy format
         } else {
@@ -436,7 +436,7 @@ impl Snapshot {
 
     /// The snapshot contents as a &str
     pub fn contents_str(&self) -> &str {
-        &self.snapshot.0
+        self.snapshot.as_str()
     }
 
     fn serialize_snapshot(&self, md: &MetaData) -> String {
@@ -510,6 +510,13 @@ impl SnapshotContents {
         SnapshotContents(get_inline_snapshot_value(value))
     }
 
+    /// Returns the snapshot contents as string with surrounding whitespace removed.
+    pub fn as_str(&self) -> &str {
+        self.0
+            .trim_start_matches(|x| x == '\r' || x == '\n')
+            .trim_end()
+    }
+
     pub fn to_inline(&self, indentation: usize) -> String {
         let contents = &self.0;
         let mut out = String::new();
@@ -576,7 +583,7 @@ impl From<SnapshotContents> for String {
 
 impl PartialEq for SnapshotContents {
     fn eq(&self, other: &Self) -> bool {
-        self.0.trim_end() == other.0.trim_end()
+        self.as_str() == other.as_str()
     }
 }
 
@@ -877,4 +884,25 @@ a
 fn test_inline_snapshot_value_newline() {
     // https://github.com/mitsuhiko/insta/issues/39
     assert_eq!(get_inline_snapshot_value("\n"), "");
+}
+
+#[test]
+fn test_parse_yaml_error() {
+    use std::env::temp_dir;
+    let mut temp = temp_dir();
+    temp.push("bad.yaml");
+    let mut f = fs::File::create(temp.clone()).unwrap();
+
+    let invalid = r#"---
+    This is invalid yaml:
+     {
+        {
+    ---
+    "#;
+
+    f.write_all(invalid.as_bytes()).unwrap();
+
+    let error = format!("{}", Snapshot::from_file(temp.as_path()).unwrap_err());
+    assert!(error.contains("Failed parsing the YAML from"));
+    assert!(error.contains("/bad.yaml"));
 }
