@@ -98,6 +98,7 @@ impl std::error::Error for Error {
 pub struct ToolConfig {
     force_update_snapshots: bool,
     force_pass: bool,
+    require_full_match: bool,
     output: OutputBehavior,
     snapshot_update: SnapshotUpdate,
     #[cfg(feature = "glob")]
@@ -143,14 +144,27 @@ impl ToolConfig {
         }
         let cfg = cfg.unwrap_or_else(|| Content::Map(Default::default()));
 
+        if let Ok("1") = env::var("INSTA_FORCE_UPDATE_SNAPSHOTS").as_deref() {
+            eprintln!("INSTA_FORCE_UPDATE_SNAPSHOTS is deprecated, use INSTA_FORCE_UPDATE");
+            env::set_var("INSTA_FORCE_UPDATE", "1");
+        }
+
         Ok(ToolConfig {
-            force_update_snapshots: match env::var("INSTA_FORCE_UPDATE_SNAPSHOTS").as_deref() {
+            force_update_snapshots: match env::var("INSTA_FORCE_UPDATE").as_deref() {
                 Err(_) | Ok("") => resolve(&cfg, &["behavior", "force_update"])
                     .and_then(|x| x.as_bool())
                     .unwrap_or(false),
                 Ok("0") => false,
                 Ok("1") => true,
-                _ => return Err(Error::Env("INSTA_FORCE_UPDATE_SNAPSHOTS")),
+                _ => return Err(Error::Env("INSTA_FORCE_UPDATE")),
+            },
+            require_full_match: match env::var("INSTA_REQUIRE_FULL_MATCH").as_deref() {
+                Err(_) | Ok("") => resolve(&cfg, &["behavior", "require_full_match"])
+                    .and_then(|x| x.as_bool())
+                    .unwrap_or(false),
+                Ok("0") => false,
+                Ok("1") => true,
+                _ => return Err(Error::Env("INSTA_REQUIRE_FULL_MATCH")),
             },
             force_pass: match env::var("INSTA_FORCE_PASS").as_deref() {
                 Err(_) | Ok("") => resolve(&cfg, &["behavior", "force_pass"])
@@ -248,6 +262,11 @@ impl ToolConfig {
     /// Is insta told to force update snapshots?
     pub fn force_update_snapshots(&self) -> bool {
         self.force_update_snapshots
+    }
+
+    /// Should we fail if metadata doesn't match?
+    pub fn require_full_match(&self) -> bool {
+        self.require_full_match
     }
 
     /// Is insta instructed to fail in tests?
