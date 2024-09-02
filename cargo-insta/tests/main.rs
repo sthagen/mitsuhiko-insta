@@ -12,7 +12,8 @@
 /// temporary workspace dirs. (We could try to enforce different names, or give
 /// up using a consistent target directory for a cache, but it would slow down
 /// repeatedly running the tests locally. To demonstrate the effect, name crates
-/// the same...)
+/// the same...). This also causes issues when running the same tests
+/// concurrently.
 use std::collections::HashMap;
 use std::env;
 use std::fs;
@@ -71,6 +72,7 @@ fn assert_success(output: &std::process::Output) {
     // we would otherwise lose any output from the command such as `dbg!`
     // statements.
     eprint!("{}", String::from_utf8_lossy(&output.stderr));
+    eprint!("{}", String::from_utf8_lossy(&output.stdout));
     assert!(
         output.status.success(),
         "Tests failed: {}\n{}",
@@ -110,15 +112,25 @@ impl TestProject {
     }
     fn cmd(&self) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_cargo-insta"));
+        // Remove environment variables so we don't inherit anything (such as
+        // `INSTA_FORCE_PASS` or `CARGO_INSTA_*`) from a cargo-insta process
+        // which runs this integration test.
+        for (key, _) in env::vars() {
+            if key.starts_with("CARGO_INSTA") || key.starts_with("INSTA") {
+                command.env_remove(&key);
+            }
+        }
+        // Turn off CI flag so that cargo insta test behaves as we expect
+        // under normal operation
+        command.env("CI", "0");
+
         command.current_dir(self.workspace_dir.as_path());
         // Use the same target directory as other tests, consistent across test
         // run. This makes the compilation much faster (though do some tests
         // tread on the toes of others? We could have a different cache for each
         // project if so...)
         command.env("CARGO_TARGET_DIR", target_dir());
-        // Turn off CI flag so that cargo insta test behaves as we expect
-        // under normal operation
-        command.env("CI", "0");
+
         command
     }
 
@@ -289,21 +301,20 @@ fn test_yaml_snapshot() {
 
     assert_success(&output);
 
-    assert_snapshot!(test_project.diff("src/main.rs"), @r##"
+    assert_snapshot!(test_project.diff("src/main.rs"), @r###"
     --- Original: src/main.rs
     +++ Updated: src/main.rs
-    @@ -15,5 +15,9 @@
+    @@ -15,5 +15,8 @@
          };
          insta::assert_yaml_snapshot!(&user, {
              ".id" => "[user_id]",
     -    }, @"");
     +    }, @r#"
-    +    ---
     +    id: "[user_id]"
     +    email: john.doe@example.com
     +    "#);
      }
-    "##);
+    "###);
 }
 
 #[test]
@@ -714,6 +725,171 @@ fn test_virtual_manifest_single_crate() {
          member-2/Cargo.toml
          member-2/src
     "###     );
+}
+
+#[test]
+fn test_force_update_snapshots() {
+    // We test with both 1.39 and `master`. These currently test the same code!
+    // But I copied the test from
+    // https://github.com/mitsuhiko/insta/pull/482/files where they'll test
+    // different code. If we don't end up merging that, we can remove one of the
+    // tests (but didn't think it was worthwhile to do the work to then undo it)
+
+    fn create_test_force_update_project(name: &str, insta_dependency: &str) -> TestProject {
+        TestFiles::new()
+            .add_file(
+                "Cargo.toml",
+                format!(
+                    r#"
+[package]
+name = "test_force_update_{}"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+insta = {}
+"#,
+                    name, insta_dependency
+                )
+                .to_string(),
+            )
+            .add_file(
+                "src/lib.rs",
+                r#"
+#[test]
+fn test_snapshot_with_newline() {
+    insta::assert_snapshot!("force_update", "Hello, world!");
+}
+"#
+                .to_string(),
+            )
+            .add_file(
+                format!(
+                    "src/snapshots/test_force_update_{}__force_update.snap",
+                    name
+                ),
+                r#"
+---
+source: src/lib.rs
+expression: 
+---
+Hello, world!
+
+
+"#
+                .to_string(),
+            )
+            .create_project()
+    }
+
+    let test_current_insta =
+        create_test_force_update_project("current", "{ path = '$PROJECT_PATH' }");
+    let test_insta_1_39_0 = create_test_force_update_project("1_39_0", "\"1.39.0\"");
+
+    // Test with current insta version
+    let output_current = test_current_insta
+        .cmd()
+        .args(["test", "--accept", "--force-update-snapshots"])
+        .output()
+        .unwrap();
+
+    assert_success(&output_current);
+
+    // Test with insta 1.39.0
+    let output_1_39_0 = test_insta_1_39_0
+        .cmd()
+        .args(["test", "--accept", "--force-update-snapshots"])
+        .output()
+        .unwrap();
+
+    assert_success(&output_1_39_0);
+
+    // Check that both versions updated the snapshot correctly
+    assert_snapshot!(test_current_insta.diff("src/snapshots/test_force_update_current__force_update.snap"), @r#"
+    --- Original: src/snapshots/test_force_update_current__force_update.snap
+    +++ Updated: src/snapshots/test_force_update_current__force_update.snap
+    @@ -1,8 +1,5 @@
+    -
+     ---
+     source: src/lib.rs
+    -expression: 
+    +expression: "\"Hello, world!\""
+     ---
+     Hello, world!
+    -
+    -
+    "#);
+
+    assert_snapshot!(test_insta_1_39_0.diff("src/snapshots/test_force_update_1_39_0__force_update.snap"), @r#"
+    --- Original: src/snapshots/test_force_update_1_39_0__force_update.snap
+    +++ Updated: src/snapshots/test_force_update_1_39_0__force_update.snap
+    @@ -1,8 +1,5 @@
+    -
+     ---
+     source: src/lib.rs
+    -expression: 
+    +expression: "\"Hello, world!\""
+     ---
+     Hello, world!
+    -
+    -
+    "#);
+}
+
+#[test]
+fn test_force_update_inline_snapshot() {
+    let test_project = TestFiles::new()
+        .add_file(
+            "Cargo.toml",
+            r#"
+[package]
+name = "force-update-inline"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+insta = { path = '$PROJECT_PATH' }
+"#
+            .to_string(),
+        )
+        .add_file(
+            "src/lib.rs",
+            r#####"
+#[test]
+fn test_excessive_hashes() {
+    insta::assert_snapshot!("foo", @r####"foo"####);
+}
+"#####
+                .to_string(),
+        )
+        .create_project();
+
+    // Run the test with --force-update-snapshots and --accept
+    let output = test_project
+        .cmd()
+        .args([
+            "test",
+            "--force-update-snapshots",
+            "--accept",
+            "--",
+            "--nocapture",
+        ])
+        .output()
+        .unwrap();
+
+    assert_success(&output);
+
+    assert_snapshot!(test_project.diff("src/lib.rs"), @r#####"
+    --- Original: src/lib.rs
+    +++ Updated: src/lib.rs
+    @@ -1,5 +1,5 @@
+     
+     #[test]
+     fn test_excessive_hashes() {
+    -    insta::assert_snapshot!("foo", @r####"foo"####);
+    +    insta::assert_snapshot!("foo", @"foo");
+     }
+    "#####);
 }
 
 #[test]
