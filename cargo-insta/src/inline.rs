@@ -4,19 +4,20 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use insta::_cargo_insta_support::SnapshotContents;
+use insta::_cargo_insta_support::TextSnapshotContents;
 use proc_macro2::TokenTree;
 
 use syn::__private::ToTokens;
 use syn::spanned::Spanned;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct InlineSnapshot {
     start: (usize, usize),
     end: (usize, usize),
     indentation: usize,
 }
 
+#[derive(Clone)]
 pub(crate) struct FilePatcher {
     filename: PathBuf,
     lines: Vec<String>,
@@ -90,7 +91,7 @@ impl FilePatcher {
         self.inline_snapshots[id].start.0 + 1
     }
 
-    pub(crate) fn set_new_content(&mut self, id: usize, snapshot: &SnapshotContents) {
+    pub(crate) fn set_new_content(&mut self, id: usize, snapshot: &TextSnapshotContents) {
         let inline = &mut self.inline_snapshots[id];
 
         // find prefix and suffix on the first and last lines
