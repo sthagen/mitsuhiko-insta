@@ -28,9 +28,6 @@ use clap::{Args, Parser, Subcommand, ValueEnum};
 #[command(
     bin_name = "cargo insta",
     arg_required_else_help = true,
-    // TODO: do we want these?
-    disable_colored_help = true,
-    disable_version_flag = true,
     next_line_help = true
 )]
 struct Opts {
@@ -61,6 +58,7 @@ impl fmt::Display for ColorWhen {
 
 #[derive(Subcommand, Debug)]
 #[command(
+    version,
     after_help = "For the online documentation of the latest version, see https://insta.rs/docs/cli/."
 )]
 #[allow(clippy::large_enum_variant)]
@@ -832,23 +830,22 @@ fn handle_unreferenced_snapshots(
         UnreferencedSnapshots::Ignore => return Ok(()),
     };
 
-    let mut files = HashSet::new();
-    match fs::read_to_string(snapshot_ref_path) {
-        Ok(s) => {
-            for line in s.lines() {
-                if let Ok(path) = fs::canonicalize(line) {
-                    files.insert(path);
-                }
+    let files = fs::read_to_string(snapshot_ref_path)
+        .map(|s| {
+            s.lines()
+                .filter_map(|line| fs::canonicalize(line).ok())
+                .collect()
+        })
+        .or_else(|err| {
+            if err.kind() == io::ErrorKind::NotFound {
+                // if the file was not created, no test referenced
+                // snapshots (though we also check for this in the calling
+                // function, so maybe duplicative...)
+                Ok(HashSet::new())
+            } else {
+                Err(err)
             }
-        }
-        Err(err) => {
-            // if the file was not created, no test referenced
-            // snapshots.
-            if err.kind() != io::ErrorKind::NotFound {
-                return Err(err.into());
-            }
-        }
-    }
+        })?;
 
     let mut encountered_any = false;
 

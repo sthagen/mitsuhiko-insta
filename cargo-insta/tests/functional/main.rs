@@ -226,7 +226,7 @@ impl TestProject {
                 format!("{} {}", style(&stdout_name).green(), line)
             }))
             .stderr(OutputFormatter(move |line| {
-                format!("{} {}", style(&stderr_name).red(), line)
+                format!("{} {}", style(&stderr_name).yellow(), line)
             }));
 
         command
@@ -251,6 +251,7 @@ impl TestProject {
 
     fn current_file_tree(workspace_dir: &Path) -> String {
         WalkBuilder::new(workspace_dir)
+            .hidden(false)
             .filter_entry(|e| e.path().file_name() != Some(std::ffi::OsStr::new("target")))
             .build()
             .filter_map(|e| e.ok())
