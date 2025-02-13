@@ -2,6 +2,8 @@
 
 All notable changes to insta and cargo-insta are documented here.
 
+- Support specifying `cargo-nextest` bin with `INSTA_CARGO_NEXTEST_BIN`.  #721 (Louis Fruleux)
+
 ## 1.42.3
 
 - Support other indention characters than spaces in inline snapshots.  #679
@@ -9,6 +11,7 @@ All notable changes to insta and cargo-insta are documented here.
 ## 1.42.2
 
 - Stop `\t` and `\x1b` (ANSI color escape) from causing snapshots to be escaped.  #715
+- Improved handling of inline snapshots within `allow_duplicates! { .. }`.  #712
 
 ## 1.42.1
 
