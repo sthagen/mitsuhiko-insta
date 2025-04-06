@@ -71,6 +71,7 @@ use tempfile::TempDir;
 mod binary;
 mod delete_pending;
 mod inline;
+mod unreferenced;
 mod workspace;
 
 /// Wraps a formatting function to be used as a `Stdio`
@@ -617,92 +618,6 @@ fn foo_always_missing() {
     // Check for the name clash error message
     assert!(error_output.contains("Insta snapshot name clash detected between 'foo_always_missing' and 'test_foo_always_missing' in 'snapshot_name_clash_test'. Rename one function."));
 }
-
-#[test]
-fn test_unreferenced_delete() {
-    let test_project = TestFiles::new()
-        .add_cargo_toml("test_unreferenced_delete")
-        .add_file(
-            "src/lib.rs",
-            r#"
-#[test]
-fn test_snapshot() {
-    insta::assert_snapshot!("Hello, world!");
-}
-"#
-            .to_string(),
-        )
-        .create_project();
-
-    // Run tests to create snapshots
-    let output = test_project
-        .insta_cmd()
-        .args(["test", "--accept"])
-        .output()
-        .unwrap();
-
-    assert!(&output.status.success());
-
-    // Manually add an unreferenced snapshot
-    let unreferenced_snapshot_path = test_project
-        .workspace_dir
-        .join("src/snapshots/test_unreferenced_delete__unused_snapshot.snap");
-    std::fs::create_dir_all(unreferenced_snapshot_path.parent().unwrap()).unwrap();
-    std::fs::write(
-        &unreferenced_snapshot_path,
-        r#"---
-source: src/lib.rs
-expression: "Unused snapshot"
----
-Unused snapshot
-"#,
-    )
-    .unwrap();
-
-    assert_snapshot!(test_project.file_tree_diff(), @r"
-    --- Original file tree
-    +++ Updated file tree
-    @@ -1,4 +1,8 @@
-     
-    +  Cargo.lock
-       Cargo.toml
-       src
-         src/lib.rs
-    +    src/snapshots
-    +      src/snapshots/test_unreferenced_delete__snapshot.snap
-    +      src/snapshots/test_unreferenced_delete__unused_snapshot.snap
-    ");
-
-    // Run cargo insta test with --unreferenced=delete
-    let output = test_project
-        .insta_cmd()
-        .args([
-            "test",
-            "--unreferenced=delete",
-            "--accept",
-            "--",
-            "--nocapture",
-        ])
-        .output()
-        .unwrap();
-
-    assert!(&output.status.success());
-
-    // We should now see the unreferenced snapshot deleted
-    assert_snapshot!(test_project.file_tree_diff(), @r"
-    --- Original file tree
-    +++ Updated file tree
-    @@ -1,4 +1,7 @@
-     
-    +  Cargo.lock
-       Cargo.toml
-       src
-         src/lib.rs
-    +    src/snapshots
-    +      src/snapshots/test_unreferenced_delete__snapshot.snap
-    ");
-}
-
 #[test]
 fn test_hidden_snapshots() {
     let test_project = TestFiles::new()
