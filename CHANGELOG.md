@@ -2,7 +2,17 @@
 
 All notable changes to insta and cargo-insta are documented here.
 
-## Unreleased
+## 1.44.3
+
+- Fix a regression in 1.44.2 where merge conflict detection was too aggressive, incorrectly flagging snapshot content containing `======` or similar patterns as conflicts. #832
+- Fix a regression in 1.42.2 where inline snapshot updates would corrupt the file when code preceded the macro (e.g., `let output = assert_snapshot!(...)`). #833
+
+## 1.44.2
+
+- Fix a rare backward compatibility issue where inline snapshots using an uncommon legacy format (single-line content stored in multiline raw strings) could fail to match after 1.44.0. #830
+- Handle merge conflicts in snapshot files gracefully. When a snapshot file contains git merge conflict markers, insta now detects them and treats the snapshot as missing, allowing tests to continue and create a new pending snapshot for review. #829
+- Skip nextest_doctest tests when cargo-nextest is not installed. #826
+- Fix functional tests failing under nextest due to inherited `NEXTEST_RUN_ID` environment variable. #824
 
 ## 1.44.1
 
