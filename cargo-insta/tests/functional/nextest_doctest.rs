@@ -248,3 +248,123 @@ fn test_simple() {
         "Warning message should not appear when --dnd alias is used:\n{stderr}"
     );
 }
+
+/// Test that nextest with config file option doesn't show warning
+#[test]
+fn test_nextest_doctest_config_no_warning() {
+    if !nextest_available() {
+        eprintln!("Skipping test: cargo-nextest not installed");
+        return;
+    }
+    let test_project = TestFiles::new()
+        .add_cargo_toml("test_nextest_doctest_config")
+        .add_file(
+            "insta.yaml",
+            r#"
+test:
+  disable_nextest_doctest: true
+"#
+            .to_string(),
+        )
+        .add_file(
+            "src/lib.rs",
+            r#"
+/// This is a function with a doctest
+///
+/// ```
+/// assert_eq!(test_nextest_doctest_config::add(2, 2), 4);
+/// ```
+pub fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+#[test]
+fn test_simple() {
+    insta::assert_snapshot!("test_value", @"test_value");
+}
+"#
+            .to_string(),
+        )
+        .create_project();
+
+    // Run with nextest - config should suppress warning
+    let output = test_project
+        .insta_cmd()
+        .args(["test", "--test-runner", "nextest", "--accept"])
+        .stderr(Stdio::piped())
+        .output()
+        .unwrap();
+
+    assert!(output.status.success());
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !stderr.contains("warning: insta won't run a separate doctest process"),
+        "Warning message should not appear when config is set:\n{stderr}"
+    );
+}
+
+/// Test that legacy format deprecation warnings are visible when running with nextest.
+///
+/// Nextest suppresses stdout/stderr from passing tests by default. To ensure
+/// deprecation warnings are visible, cargo-insta collects warnings via
+/// `INSTA_WARNINGS_FILE` and displays them after tests complete.
+#[test]
+fn test_nextest_legacy_format_warning_visible() {
+    if !nextest_available() {
+        eprintln!("Skipping test: cargo-nextest not installed");
+        return;
+    }
+
+    // Create a project with a legacy format inline snapshot (single-line content
+    // stored in multiline format). This triggers the "existing value is in a
+    // legacy format" warning.
+    let test_project = TestFiles::new()
+        .add_cargo_toml("test_nextest_legacy_warning")
+        .add_file(
+            "src/lib.rs",
+            r#####"
+#[test]
+fn test_legacy_format() {
+    insta::assert_snapshot!(get_value(), @r"
+    single line content
+    ");
+}
+
+fn get_value() -> &'static str {
+    "single line content"
+}
+"#####
+                .to_string(),
+        )
+        .create_project();
+
+    // Run with nextest and capture both stdout and stderr.
+    // cargo-insta now collects warnings via INSTA_WARNINGS_FILE and displays
+    // them after tests complete, so we don't need NEXTEST_SUCCESS_OUTPUT.
+    let output = test_project
+        .insta_cmd()
+        .args(["test", "--test-runner", "nextest", "--check", "--dnd"])
+        .stderr(Stdio::piped())
+        .stdout(Stdio::piped())
+        .output()
+        .unwrap();
+
+    // Test should pass (legacy format still matches)
+    assert!(
+        output.status.success(),
+        "Test should pass with legacy format. Stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    // The legacy format warning should be visible in the output
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let combined = format!("{stderr}\n{stdout}");
+
+    assert!(
+        combined.contains("existing value is in a legacy format"),
+        "Legacy format warning not found in nextest output.\n\
+         Stderr:\n{stderr}\n\nStdout:\n{stdout}"
+    );
+}

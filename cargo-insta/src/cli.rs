@@ -66,7 +66,7 @@ impl fmt::Display for ColorWhen {
 enum Command {
     /// Interactively review snapshots
     #[command(alias = "verify")]
-    Review(ProcessCommand),
+    Review(ReviewCommand),
     /// Rejects all snapshots
     Reject(ProcessCommand),
     /// Accept all snapshots
@@ -117,6 +117,15 @@ struct ProcessCommand {
     /// Do not print to stdout.
     #[arg(short = 'q', long)]
     quiet: bool,
+}
+
+#[derive(Args, Debug)]
+struct ReviewCommand {
+    #[command(flatten)]
+    process: ProcessCommand,
+    /// External diff tool to use (e.g., "delta --side-by-side").
+    #[arg(long, env = "INSTA_DIFF_TOOL")]
+    diff_tool: Option<String>,
 }
 
 #[derive(Args, Debug)]
@@ -875,6 +884,12 @@ fn test_run(mut cmd: TestCommand, color: ColorWhen) -> Result<(), Box<dyn Error>
     let (mut proc, snapshot_ref_file, prevents_doc_run) =
         prepare_test_runner(&cmd, test_runner, color, &[], None, &loc)?;
 
+    // Set up warnings file for collecting warnings from test processes.
+    // This is necessary because test runners like nextest suppress stdout/stderr
+    // from passing tests by default.
+    let warnings_file = env::temp_dir().join(format!("insta-warnings-{}", Uuid::new_v4()));
+    proc.env("INSTA_WARNINGS_FILE", &warnings_file);
+
     if let Some(workspace_root) = &cmd.target_args.workspace_root {
         proc.current_dir(workspace_root);
     }
@@ -889,9 +904,11 @@ fn test_run(mut cmd: TestCommand, color: ColorWhen) -> Result<(), Box<dyn Error>
     // Note that unlike `cargo test`, `cargo test --doctest` will run doctests
     // even on crates that specify `doctests = false`. But I don't think there's
     // a way to replicate the `cargo test` behavior.
+    let disable_nextest_doctest =
+        cmd.disable_nextest_doctest || loc.tool_config.disable_nextest_doctest();
     if matches!(cmd.test_runner, TestRunner::Nextest)
         && !prevents_doc_run
-        && !cmd.disable_nextest_doctest
+        && !disable_nextest_doctest
     {
         // Check if there are doctests and show warning
         if has_doctests(&loc.packages) {
@@ -910,7 +927,22 @@ fn test_run(mut cmd: TestCommand, color: ColorWhen) -> Result<(), Box<dyn Error>
             snapshot_ref_file.as_deref(),
             &loc,
         )?;
+        // Use the same warnings file for doctests
+        proc.env("INSTA_WARNINGS_FILE", &warnings_file);
         success = success && proc.status()?.success();
+    }
+
+    // Display any warnings collected during tests (deduplicated)
+    if warnings_file.exists() {
+        if let Ok(contents) = fs::read_to_string(&warnings_file) {
+            let mut seen = std::collections::BTreeSet::new();
+            for line in contents.lines().map(str::trim).filter(|l| !l.is_empty()) {
+                if seen.insert(line.to_owned()) {
+                    eprintln!("{}", line);
+                }
+            }
+        }
+        fs::remove_file(&warnings_file).ok();
     }
 
     if !success && cmd.review {
@@ -971,6 +1003,24 @@ fn test_run(mut cmd: TestCommand, color: ColorWhen) -> Result<(), Box<dyn Error>
     } else {
         Ok(())
     }
+}
+
+/// Quick check if a file is likely an insta snapshot by checking for the
+/// `---\nsource:` prefix. This distinguishes insta snapshots from other
+/// snapshot formats (e.g., vitest, jest) that may use the same `.snap` extension.
+///
+/// Only reads 16 bytes for efficiency (longest pattern is 13 bytes for CRLF).
+fn is_likely_insta_snapshot(path: &Path) -> bool {
+    use io::Read;
+    let mut buf = [0u8; 16];
+    let Ok(mut file) = fs::File::open(path) else {
+        return false;
+    };
+    let Ok(n) = file.read(&mut buf) else {
+        return false;
+    };
+    let s = &buf[..n];
+    s.starts_with(b"---\nsource:") || s.starts_with(b"---\r\nsource:")
 }
 
 /// Scan for any snapshots that were not referenced by any test.
@@ -1040,7 +1090,9 @@ fn handle_unreferenced_snapshots(
             path.extension()
                 .map(|x| x != "new" && x != "pending-snap")
                 .unwrap_or(true)
-        });
+        })
+        // skip files that don't look like insta snapshots (e.g., vitest .snap files)
+        .filter(|path| is_likely_insta_snapshot(path));
 
         for path in unreferenced_snapshots {
             if !encountered_any {
@@ -1476,19 +1528,27 @@ pub(crate) fn run() -> Result<(), Box<dyn Error>> {
 
     handle_color(opts.color);
     match opts.command {
-        Command::Review(ref cmd) | Command::Accept(ref cmd) | Command::Reject(ref cmd) => {
+        Command::Review(ref cmd) => {
+            if let Some(ref diff_tool) = cmd.diff_tool {
+                env::set_var("INSTA_DIFF_TOOL", diff_tool);
+            }
             review_snapshots(
-                cmd.quiet,
-                cmd.snapshot_filter.as_deref(),
-                &handle_target_args(&cmd.target_args, &[])?,
-                match opts.command {
-                    Command::Review(_) => None,
-                    Command::Accept(_) => Some(Operation::Accept),
-                    Command::Reject(_) => Some(Operation::Reject),
-                    _ => unreachable!(),
-                },
+                cmd.process.quiet,
+                cmd.process.snapshot_filter.as_deref(),
+                &handle_target_args(&cmd.process.target_args, &[])?,
+                None,
             )
         }
+        Command::Accept(ref cmd) | Command::Reject(ref cmd) => review_snapshots(
+            cmd.quiet,
+            cmd.snapshot_filter.as_deref(),
+            &handle_target_args(&cmd.target_args, &[])?,
+            match opts.command {
+                Command::Accept(_) => Some(Operation::Accept),
+                Command::Reject(_) => Some(Operation::Reject),
+                _ => unreachable!(),
+            },
+        ),
         Command::Test(cmd) => test_run(cmd, opts.color.unwrap_or(ColorWhen::Auto)),
         Command::Show(cmd) => show_cmd(cmd),
         Command::PendingSnapshots(cmd) => pending_snapshots_cmd(cmd),
