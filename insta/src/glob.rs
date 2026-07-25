@@ -125,7 +125,10 @@ pub fn glob_exec<F: FnMut(&Path)>(workspace_dir: &Path, base: &Path, pattern: &s
         if top.show_insta_hint {
             println!(
                 "{hint}",
-                hint = style("To update snapshots run `cargo insta review`").dim(),
+                hint = style(
+                    "To update snapshots run `cargo insta review` or set `INSTA_UPDATE=always`"
+                )
+                .dim(),
             );
         }
         if top.failed > 1 {
