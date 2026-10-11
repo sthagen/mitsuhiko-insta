@@ -2,6 +2,30 @@
 
 All notable changes to insta and cargo-insta are documented here.
 
+## Unreleased
+
+- Remove the trailing semicolon from the `assert_binary_snapshot!` macro body,
+  which #940 missed, to avoid compiler warnings when used in expression
+  position.
+
+## 1.49.0
+
+- Allow `Option<&OsStr>` snapshot names, such as `Path::file_name()`,
+  without explicit string conversion. #929 (@dislogical)
+- Add prebuilt `cargo-insta` binaries for ARM64 Linux
+  (`aarch64-unknown-linux-gnu`). #942 (@aljohri)
+- Fix JSON serialization of maps keyed by unit enum variants. Keys use the
+  serialized variant name, including serde renames. #934 (@teddytennant)
+- Remove trailing semicolons from serialization macro bodies to avoid
+  compiler warnings when used in expression position. #940 (@Tiwalun)
+- Mention `INSTA_UPDATE=always` in snapshot mismatch hints for file
+  snapshots. #927 (@hiro-nikaitou)
+- Update the lockfile's `tempfile` and `rustix` dependencies to fix builds
+  with newer Rust toolchains. #939
+- Fix `cargo insta test --all-targets --test-runner nextest` failing with
+  "Can't mix --doc with other target selecting options". Like `cargo test
+  --all-targets`, it no longer runs doctests. #460
+
 ## 1.48.0
 
 - Add `strip_ansi_escape_codes` setting which removes ANSI escape sequences
